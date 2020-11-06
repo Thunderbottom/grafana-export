@@ -129,12 +129,14 @@ func syncDashboards(ds *dashboardSearch) {
 			db, err := grafanaAPI(fmt.Sprintf("dashboards/%s", dashboard.URI))
 			if err != nil {
 				fmt.Println("Failed to fetch dashboard:", dashboard.Title)
+				failed = failed + 1
 				continue
 			}
 			var dashboardJSON map[string]interface{}
 			err = json.Unmarshal(db, &dashboardJSON)
 			if err != nil {
 				fmt.Println("Failed to parse dashboard:", dashboard.Title)
+				failed = failed + 1
 				continue
 			}
 			// if no folder name is specified for the dashboard, save
@@ -149,7 +151,12 @@ func syncDashboards(ds *dashboardSearch) {
 				check(err)
 			}
 
-			dbJSON, _ := json.MarshalIndent(dashboardJSON, "", "  ")
+			dbJSON, err := json.MarshalIndent(dashboardJSON, "", "  ")
+			if err != nil {
+				fmt.Println("Failed to marshal the dashboard JSON:", dashboard.Title)
+				failed = failed + 1
+				continue
+			}
 			err = ioutil.WriteFile(fmt.Sprintf("%s/%s.json", dbFolder, strings.Replace(dashboard.Title, "/", "-", -1)), dbJSON, 0644)
 			if err != nil {
 				fmt.Println("Failed to save dashboard:", dashboard.Title)
