@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/knadh/koanf"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -15,78 +17,26 @@ var (
 	client = &http.Client{
 		Timeout: 10 * time.Second,
 	}
-	// dashboardDir is the directory where the dashboard will be downloaded
-	// defaults to "dashboards"
-	dashboardDir = os.Getenv("GRAFANA_DASHBOARDS_DIR")
-	// dbFolder is the folder name for the currently downloading dashboard
-	dbFolder = ""
-	// grafanaURL is the base url for the grafana instance
-	grafanaURL = os.Getenv("GRAFANA_URL")
-	// grafanaToken is the api access key for the grafana instance
-	grafanaToken = os.Getenv("GRAFANA_API_TOKEN")
-	// grafanaLimit is a variable to set a limit on the number of dashboards to fetch
-	grafanaLimit = os.Getenv("GRAFANA_API_LIMIT")
 )
-
-// dashboardSearch is a struct that the grafana dashboard search data
-type dashboardSearch []struct {
-	ID          int           `json:"id"`
-	UID         string        `json:"uid"`
-	Title       string        `json:"title"`
-	URI         string        `json:"uri"`
-	URL         string        `json:"url"`
-	Slug        string        `json:"slug"`
-	Type        string        `json:"type"`
-	Tags        []interface{} `json:"tags"`
-	IsStarred   bool          `json:"isStarred"`
-	FolderID    int           `json:"folderId,omitempty"`
-	FolderUID   string        `json:"folderUid,omitempty"`
-	FolderTitle string        `json:"folderTitle,omitempty"`
-	FolderURL   string        `json:"folderUrl,omitempty"`
-}
 
 func check(e error) {
 	if e != nil {
-		panic(e)
+		log.Panic(e)
 	}
 }
 
-func main() {
-	if grafanaURL == "" || grafanaToken == "" {
-		fmt.Println("Please set GRAFANA_URL and GRAFANA_API_TOKEN before running the script.")
-		os.Exit(1)
-	}
-	if dashboardDir == "" {
-		dashboardDir = "dashboards"
-	}
-	grafanaURL = grafanaURL + "/api/"
-
-	resp, err := grafanaAPI("search")
-	check(err)
-
-	ds := &dashboardSearch{}
-	err = json.Unmarshal(resp, ds)
-	check(err)
-
-	syncDashboards(ds)
-}
-
-// grafanaAPI calls the grafana API endpoint for the provided GRAFANA_URL
-func grafanaAPI(endpoint string) ([]byte, error) {
-	req, err := http.NewRequest("GET", grafanaURL+endpoint, nil)
+// getGrafanaData calls the grafana API endpoint for the provided GRAFANA_URL
+func getGrafanaData(cfg *koanf.Koanf, endpoint string) ([]byte, error) {
+	req, err := http.NewRequest("GET", cfg.String("url")+"/api/"+endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", grafanaToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.String("api-key")))
 	req.Header.Set("Content-Type", "application/json")
-	if grafanaLimit != "" {
-		if glInt, err := strconv.Atoi(grafanaLimit); err != nil && glInt > 0 {
-			params := req.URL.Query()
-			params.Add("limit", grafanaLimit)
-			req.URL.RawQuery = params.Encode()
-		}
-	}
+	params := req.URL.Query()
+	params.Add("limit", strconv.Itoa(cfg.Int("limit")))
+	req.URL.RawQuery = params.Encode()
 
 	response, err := client.Do(req)
 	if err != nil {
@@ -107,66 +57,81 @@ func grafanaAPI(endpoint string) ([]byte, error) {
 
 // syncDashboards replicates the grafana folder structure, downloads all
 // dashbords using the grafana api, and places them in each folder
-func syncDashboards(ds *dashboardSearch) {
-	if _, err := os.Stat(dashboardDir); !os.IsNotExist(err) {
-		os.RemoveAll(dashboardDir)
+func syncDashboards(cfg *koanf.Koanf, dashboards dashboardSearch) {
+	dashDir := cfg.String("dashboards-dir")
+	if _, err := os.Stat(dashDir); !os.IsNotExist(err) {
+		if cfg.Bool("overwrite") {
+			os.RemoveAll(dashDir)
+		} else {
+			log.Fatal(`Dashboards directory already exists. Pass --overwrite to overwrite the directory.`)
+		}
 	}
-	err := os.Mkdir(dashboardDir, 0755)
+	err := os.Mkdir(dashDir, 0755)
 	check(err)
 
 	var failed, total int
-	fmt.Println("Syncing Dashboards...")
-	for _, dashboard := range *ds {
-		if dashboard.Type == "dash-folder" {
+	log.Println("Syncing Dashboards...")
+	for _, ds := range dashboards {
+		if ds.Type == "dash-folder" {
 			// check if a folder for exists, if not, create one
-			if _, err := os.Stat(dashboardDir); os.IsNotExist(err) {
-				err = os.Mkdir(dashboardDir, 0755)
+			if _, err := os.Stat(dashDir); os.IsNotExist(err) {
+				err := os.Mkdir(dashDir, 0755)
 				check(err)
 			}
 		} else {
 			total = total + 1
 			// get the dashboard json from the grafana api
-			db, err := grafanaAPI(fmt.Sprintf("dashboards/%s", dashboard.URI))
+			db, err := getGrafanaData(cfg, fmt.Sprintf("dashboards/%s", ds.URI))
 			if err != nil {
-				fmt.Println("Failed to fetch dashboard:", dashboard.Title)
+				log.Println("Failed to fetch dashboard:", ds.Title)
 				failed = failed + 1
 				continue
 			}
-			var dashboardJSON map[string]interface{}
-			err = json.Unmarshal(db, &dashboardJSON)
+			var dashJSON map[string]interface{}
+			err = json.Unmarshal(db, &dashJSON)
 			if err != nil {
-				fmt.Println("Failed to parse dashboard:", dashboard.Title)
+				log.Println("Failed to parse dashboard:", ds.Title)
 				failed = failed + 1
 				continue
 			}
 			// if no folder name is specified for the dashboard, save
 			// to the General/ folder
-			if dashboard.FolderTitle == "" {
-				dbFolder = fmt.Sprintf("%s/General", dashboardDir)
-			} else {
-				dbFolder = fmt.Sprintf("%s/%s", dashboardDir, dashboard.FolderTitle)
+			if ds.FolderTitle == "" {
+				ds.FolderTitle = "General"
 			}
+			dbFolder := fmt.Sprintf("%s/%s", dashDir, ds.FolderTitle)
 			if _, err := os.Stat(dbFolder); os.IsNotExist(err) {
-				err = os.MkdirAll(dbFolder, 0755)
+				err := os.MkdirAll(dbFolder, 0755)
 				check(err)
 			}
 
-			dbJSON, err := json.MarshalIndent(dashboardJSON, "", "  ")
+			dj, err := json.MarshalIndent(dashJSON, "", "  ")
 			if err != nil {
-				fmt.Println("Failed to marshal the dashboard JSON:", dashboard.Title)
+				log.Println("Failed to marshal the dashboard JSON:", ds.Title)
 				failed = failed + 1
 				continue
 			}
-			err = ioutil.WriteFile(fmt.Sprintf("%s/%s.json", dbFolder, strings.Replace(dashboard.Title, "/", "-", -1)), dbJSON, 0644)
+			err = ioutil.WriteFile(fmt.Sprintf("%s/%s.json", dbFolder, strings.Replace(ds.Title, "/", "-", -1)), dj, 0644)
 			if err != nil {
-				fmt.Println("Failed to save dashboard:", dashboard.Title)
+				log.Println("Failed to save dashboard:", ds.Title)
 				failed = failed + 1
 				continue
 			}
-			fmt.Println(dashboard.Title, "downloaded.")
+			fmt.Println(ds.Title, "downloaded.")
 		}
 	}
-	dbFile, _ := json.MarshalIndent(ds, "", "  ")
-	err = ioutil.WriteFile("dashboards.json", dbFile, 0644)
 	fmt.Println(fmt.Sprintf("Done! Download Statistics:\n\tTotal: %d\n\tFailed: %d", total, failed))
+}
+
+func main() {
+	cfg := getConfig()
+
+	resp, err := getGrafanaData(cfg, "search")
+	check(err)
+
+	ds := dashboardSearch{}
+	err = json.Unmarshal(resp, &ds)
+	check(err)
+
+	syncDashboards(cfg, ds)
 }

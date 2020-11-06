@@ -1,18 +1,60 @@
+<a href="https://zerodha.tech"><img src="https://zerodha.tech/static/images/github-badge.svg" align="right"/></a>
+
 # Grafana Export
 
 A small utility to download all dashboards from your Grafana Instance using the Grafana HTTP API.
+
+## Installation
+
+##### Docker Installation
+
+To locally build and run the docker image:
+
+```shell
+$ docker build -t grafana-export -f docker/Dockerfile .
+$ docker run -v ./dashboards:/dashboards \
+	-e GEXPORT_URL=<grafana-url> \
+	-e GEXPORT_API_KEY=<api-key> \
+	-e GEXPORT_OVERWRITE=true \
+	grafana-export
+```
+
+##### Compiling the Binary
+
+```shell
+$ git clone git@github.com:thunderbottom/grafana-export.git
+$ cd grafana-export
+$ make dist # or just `make` for a dynamically-linked binary
+```
 
 ## Usage
 
 The utility requires the Grafana instance URL, and an API token to access the API:
 
+##### Command Line Arguments
+
 ```shell
-$ GRAFANA_URL=http://your-grafana-instance GRAFANA_API_TOKEN=token ./grafana-export
+$ ./grafana-export --help
+Usage of grafana-export:
+  -api-key string
+    	The API key to access the Grafana Instance.
+  -dashboards-dir string
+    	The directory where the Grafana dashboards are to be downloaded. (default "dashboards")
+  -limit int
+    	The limit for number of results returned by the Grafana API. (default 1000)
+  -overwrite
+    	Overwrite existing dashboards directory.
+  -url string
+    	The base URL for the Grafana instance.
 ```
 
-By default, all dashboards will be stored in the `dashboards/` directory. You can override this path
-by passing the `GRAFANA_DASHBOARD_DIR` variable to the utility. The utility also accepts `GRAFANA_API_LIMIT`
-as a parameter, in case you would like to override the default API search limit of 1000.
+##### Environment Variables
+
+The utility accepts environment variables as arguments. All environment variables prefixed with `GEXPORT_`
+will be picked up by the utility, and will override its corresponding flag value passed to the utility.
+For example, you may use `GEXPORT_URL` instead of passing the `--url` flag to the utility.
+
+**Note:** Environment variables supersede the values passed as flags to the utility.
 
 ## FAQ
 
@@ -21,3 +63,20 @@ as a parameter, in case you would like to override the default API search limit 
 **A.** Your instance could have role-based dashboard access limits. The default API token generated uses
 the "Viewer" role. You need to generate an API key with the "Admin" role for the API token to be able to
 download all the dashboards.
+
+## License
+
+```
+Copyright (c) 2020 Chinmay D. Pai
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+```
