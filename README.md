@@ -6,6 +6,11 @@ A small utility to download all dashboards from your Grafana Instance using the 
 
 ## Installation
 
+##### Precompiled Binary
+
+To download and use precompiled binaries for GNU/Linux, MacOS, and Windows, head over to the
+[releases page](https://github.com/thunderbottom/grafana-export/releases).
+
 ##### Docker Installation
 
 To locally build and run the docker image:
