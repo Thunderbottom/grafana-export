@@ -1,0 +1,49 @@
+project_name: grafana-export
+
+builds:
+  - # Build macOS, Linux and Windows versions
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+    targets:
+      - linux_amd64
+      - darwin_amd64
+      - windows_amd64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}}
+
+archives:
+  - # Replacements for GOOS and GOARCH in the archive name.
+    replacements:
+      darwin: macOS
+      linux: Linux
+      windows: Windows
+      amd64: x86_64
+
+    # Can be used to change the archive formats for specific GOOS.
+    format_overrides:
+      - goos: windows
+        format: zip
+
+    # Additional files/template/globs you want to add to the archive.
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ .Tag }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^*.md:"
