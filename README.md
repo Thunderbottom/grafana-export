@@ -17,7 +17,7 @@ To locally build and run the docker image:
 
 ```shell
 $ docker build -t grafana-export -f docker/Dockerfile .
-$ docker run -v ./dashboards:/dashboards \
+$ docker run -v $(pwd)/dashboards:/dashboards \
 	-e GEXPORT_URL=<grafana-url> \
 	-e GEXPORT_API_KEY=<api-key> \
 	-e GEXPORT_OVERWRITE=true \
