@@ -21,7 +21,7 @@ var (
 
 func check(e error) {
 	if e != nil {
-		log.Panic(e)
+		log.Fatal(e)
 	}
 }
 
@@ -125,6 +125,11 @@ func syncDashboards(cfg *koanf.Koanf, dashboards dashboardSearch) {
 
 func main() {
 	cfg := getConfig()
+	if cfg.String("url") == "" {
+		log.Fatal("Missing required argument: --url")
+	} else if cfg.String("api-key") == "" {
+		log.Fatal("Missing required argument: --api-key")
+	}
 
 	resp, err := getGrafanaData(cfg, "search")
 	check(err)
@@ -134,4 +139,37 @@ func main() {
 	check(err)
 
 	syncDashboards(cfg, ds)
+
+	var c string
+	cmp := cfg.Bool("compress")
+	if cmp {
+		c, err = compress(cfg.String("dashboards-dir"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Dashboards compressed: %v", c)
+	}
+
+	// backup to s3 if --backup is passed
+	if cfg.Bool("backup") {
+		bucketName := cfg.String("bucket-name")
+		bucketKey := cfg.String("bucket-key")
+		if bucketName == "" {
+			log.Fatal("No S3 bucket specified for backup.")
+		}
+		// check if --compress is passed
+		// prevents re-compression
+		if !cmp {
+			c, err = compress(cfg.String("dashboards-dir"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Dashboards compressed: %v", c)
+		}
+
+		if err := backup(c, bucketName, bucketKey); err != nil {
+			log.Fatalf("Failed to backup to S3 bucket: %v", err)
+		}
+		log.Printf("Uploaded %v to S3 Bucket %v/%v", c, bucketName, bucketKey)
+	}
 }

@@ -1,6 +1,7 @@
 package main
 
-// dashboardSearch is a struct that the grafana dashboard search data
+// dashboardSearch is a struct that contains
+// the search data for the grafana dashboard api
 type dashboardSearch []struct {
 	ID          int           `json:"id"`
 	UID         string        `json:"uid"`

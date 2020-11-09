@@ -2,7 +2,7 @@
 
 # Grafana Export
 
-A small utility to download all dashboards from your Grafana Instance using the Grafana HTTP API.
+A small utility to download and backup all dashboards from your Grafana Instance using the Grafana HTTP API.
 
 ## Installation
 
@@ -34,7 +34,7 @@ $ make dist # or just `make` for a dynamically-linked binary
 
 ## Usage
 
-The utility requires the Grafana instance URL, and an API token to access the API:
+The utility requires the Grafana instance URL and an API token:
 
 ##### Command Line Arguments
 
@@ -43,6 +43,14 @@ $ ./grafana-export --help
 Usage of grafana-export:
   -api-key string
     	The API key to access the Grafana Instance.
+  -backup
+    	Backup the current set of downloaded dashboards to S3. Requires --bucket-name.
+  -bucket-key string
+    	The key to use for storing the backup inside the S3 bucket. (default "grafana-export")
+  -bucket-name string
+    	Compress and upload the dashboards to the specified S3 bucket. Requires --backup.
+  -compress
+    	Create an archive of the exported dashboards folder.
   -dashboards-dir string
     	The directory where the Grafana dashboards are to be downloaded. (default "dashboards")
   -limit int
@@ -52,6 +60,10 @@ Usage of grafana-export:
   -url string
     	The base URL for the Grafana instance.
 ```
+
+To create an S3 backup for the downloaded dashboards, the utility requires `awscli` to be configured on
+the host. For setting a bucket region, export `AWS_REGION=<region>` or `AWS_SDK_LOAD_CONFIG` to load the
+`~/.aws/config` file.
 
 ##### Environment Variables
 
